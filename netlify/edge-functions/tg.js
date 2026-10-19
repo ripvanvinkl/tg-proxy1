@@ -1,28 +1,31 @@
 export default async (request) => {
-  const url = new URL(request.url);
+  try {
+    const url = new URL(request.url);
 
-  if (!url.pathname.startsWith("/bot")) {
-    return new Response("Not found", { status: 404 });
+    // Проверяем, что запрос к Telegram
+    if (!url.pathname.includes("/bot")) {
+      return new Response("Not found", { status: 404 });
+    }
+
+    const targetUrl = new URL(url.pathname + url.search, "https://api.telegram.org");
+
+    // Копируем заголовки и выставляем Host
+    const headers = new Headers(request.headers);
+    headers.set("Host", "api.telegram.org");
+
+    let body = null;
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      body = await request.arrayBuffer();
+    }
+
+    const response = await fetch(targetUrl.toString(), {
+      method: request.method,
+      headers: headers,
+      body: body,
+    });
+
+    return response;
+  } catch (err) {
+    return new Response("Edge Error: " + err.message, { status: 500 });
   }
-
-  const targetUrl = new URL(url.pathname + url.search, "https://api.telegram.org");
-
-  // 1. Вычитываем тело (график) целиком в память
-  const body = (request.method !== "GET" && request.method !== "HEAD")
-    ? await request.arrayBuffer()
-    : null;
-
-  // 2. Передаем ТОЛЬКО Content-Type (он содержит boundary файла).
-  // Content-Length и Host движок выставит сам точно под размер буфера.
-  const headers = new Headers();
-  const contentType = request.headers.get("content-type");
-  if (contentType) {
-    headers.set("content-type", contentType);
-  }
-
-  return await fetch(targetUrl.toString(), {
-    method: request.method,
-    headers: headers,
-    body: body,
-  });
 };
