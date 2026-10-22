@@ -1,9 +1,8 @@
 export default async (request) => {
   const url = new URL(request.url);
 
-  // Проверочный эндпоинт
   if (url.pathname === "/ping") {
-    return new Response("pong-edge-alive", { status: 200 });
+    return new Response("pong-edge-alive\n", { status: 200 });
   }
 
   if (!url.pathname.includes("/bot")) {
@@ -12,8 +11,7 @@ export default async (request) => {
 
   const targetUrl = "https://api.telegram.org" + url.pathname + url.search;
 
-  // Очищаем заголовки: убираем старый Host и Content-Length,
-  // чтобы Telegram не зависал в ожидании потока
+  // Формируем чистые заголовки
   const headers = new Headers();
   for (const [key, value] of request.headers.entries()) {
     const lower = key.toLowerCase();
@@ -31,6 +29,8 @@ export default async (request) => {
   let body = null;
   if (request.method !== "GET" && request.method !== "HEAD") {
     body = await request.arrayBuffer();
+    // Явно указываем точный размер файла в байтах для Telegram API
+    headers.set("Content-Length", body.byteLength.toString());
   }
 
   try {
@@ -40,12 +40,13 @@ export default async (request) => {
       body: body,
     });
 
-    const resHeaders = new Headers(response.headers);
+    const resText = await response.text();
+    const resHeaders = new Headers();
+    resHeaders.set("Content-Type", response.headers.get("Content-Type") || "application/json");
     resHeaders.set("x-edge-status", "active");
 
-    return new Response(response.body, {
+    return new Response(resText, {
       status: response.status,
-      statusText: response.statusText,
       headers: resHeaders,
     });
   } catch (err) {
